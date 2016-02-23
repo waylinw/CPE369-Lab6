@@ -11,32 +11,62 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat; // class for "poin
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat; // class for "pointing" at output file
 import org.apache.hadoop.fs.Path;                // Hadoop's implementation of directory path/filename
 import java.io.IOException;
+import java.util.ArrayList;
 
 
-public class invert {
+public class mixture {
 
-    public static class invertMapper     // Need to replace the four type labels there with actual Java class names
+    public static class mixtureMapper     // Need to replace the four type labels there with actual Java class names
             extends Mapper< LongWritable, Text, Text, Text > {
         @Override
         public void map(LongWritable key, Text value, Context context)
                 throws IOException, InterruptedException {
-            String word = value.toString();
-            String reversed = "";
-            for (int i = word.length() - 1; i >= 0; i--) {
-                reversed+=word.charAt(i);
-            }
+            String[] sortedVals = value.toString().replaceAll("\\s+","").split(",");
+            String empty = "";
 
-            context.write(new Text(word), new Text(reversed));
+            if (sortedVals.length == 3) {
+                //longest word in last
+                if (sortedVals[0].length() <= sortedVals[1].length()
+                        && sortedVals[1].length() < sortedVals[2].length()) {
+                    context.write(new Text(sortedVals[0]), new Text(sortedVals[2]));
+                    context.write(new Text(sortedVals[1]), new Text(sortedVals[2]));
+                }
+                //longest word in middle
+                else if (sortedVals[0].length() < sortedVals[1].length()
+                        && sortedVals[1].length() >= sortedVals[2].length()) {
+                    context.write(new Text(sortedVals[0]), new Text(sortedVals[1]));
+                    //longest word in middle and last
+                    if (sortedVals[1].length() == sortedVals[2].length()) {
+                        context.write(new Text(sortedVals[0]), new Text(sortedVals[2]));
+                    }
+                }
+                for (String temp : sortedVals) {
+                    context.write(new Text(temp), new Text(empty));
+                }
+            }
 
         }
     }
 
-    public static class invertReducer   // needs to replace the four type labels with actual Java class names
+    public static class mixtureReducer   // needs to replace the four type labels with actual Java class names
             extends  Reducer< Text, Text, Text, Text> {
         @Override
         public void reduce( Text key, Iterable<Text> values, Context context)
                 throws IOException, InterruptedException {
-            context.write(key, values.iterator().next());
+            int valueCount = 0;
+            ArrayList<String> vals = new ArrayList<>();
+            for (Text temp : values) {
+                if (!temp.toString().isEmpty()) {
+                    vals.add(temp.toString());
+                }
+                valueCount++;
+            }
+
+            if (valueCount > 1) {
+                for (String word : vals) {
+                    context.write(key, new Text(word));
+                }
+            }
         }
     }
 
@@ -45,22 +75,22 @@ public class invert {
         Job  job = Job.getInstance();  //  job = new Job() is now deprecated
 
         // step 2: register the MapReduce class
-        job.setJarByClass(invert.class);
+        job.setJarByClass(mixture.class);
 
         //  step 3:  Set Input and Output files
         FileInputFormat.addInputPath(job, new Path(args[0])); // put what you need as input file
         FileOutputFormat.setOutputPath(job, new Path(args[1])); // put what you need as output file
 
         // step 4:  Register mapper and reducer
-        job.setMapperClass(invertMapper.class);
-        job.setReducerClass(invertReducer.class);
+        job.setMapperClass(mixtureMapper.class);
+        job.setReducerClass(mixtureReducer.class);
 
         //  step 5: Set up output information
         job.setOutputKeyClass(Text.class); // specify the output class (what reduce() emits) for key
         job.setOutputValueClass(Text.class); // specify the output class (what reduce() emits) for value
 
         // step 6: Set up other job parameters at will
-        job.setJobName("wwang16-Lab6-2");
+        job.setJobName("wwang16-Lab6-5");
 
         // step 8: profit
         System.exit(job.waitForCompletion(true) ? 0:1);
